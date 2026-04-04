@@ -1,0 +1,306 @@
+// FanScript Database Schema
+// Prisma Schema for Production-Grade Ticketing Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER MANAGEMENT
+// ============================================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String    @db.VarChar(255)
+  name          String    @db.VarChar(255)
+  phone         String?   @db.VarChar(20)
+  role          UserRole  @default(FAN)
+  avatar        String?
+  emailVerified Boolean   @default(false)
+  phoneVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  venue        Venue?
+  artist       Artist?
+  orders       Order[]
+  tickets      Ticket[]
+  verifications Verification[]
+  refreshTokens RefreshToken[]
+
+  @@index([email])
+  @@index([role])
+}
+
+enum UserRole {
+  ADMIN
+  FAN
+  ARTIST
+  VENUE
+}
+
+// ============================================
+// AUTHENTICATION
+// ============================================
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model Verification {
+  id            String    @id @default(uuid())
+  userId        String
+  code          String    @db.VarChar(10)
+  type          VerificationType
+  expiresAt     DateTime
+  verifiedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([code])
+}
+
+enum VerificationType {
+  EMAIL
+  PHONE
+}
+
+// ============================================
+// VENUES
+// ============================================
+
+model Venue {
+  id          String    @id @default(uuid())
+  userId      String    @unique
+  name        String    @db.VarChar(255)
+  slug        String    @unique
+  description String?
+  address     String    @db.VarChar(500)
+  city        String    @db.VarChar(100)
+  country    String    @db.VarChar(100)
+  eircode     String?   @db.VarChar(20)
+  latitude    Float?
+  longitude   Float?
+  capacity    Int       @default(100)
+  imageUrl    String?
+  website     String?
+  phone       String?   @db.VarChar(20)
+  email       String?
+  verified    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events      Event[]
+
+  @@index([city])
+  @@index([country])
+  @@index([slug])
+}
+
+// ============================================
+// ARTISTS
+// ============================================
+
+model Artist {
+  id          String    @id @default(uuid())
+  userId      String    @unique
+  name        String    @db.VarChar(255)
+  slug        String    @unique
+  genre       String?   @db.VarChar(100)
+  bio         String?   @db.Text
+  imageUrl    String?
+  website     String?
+  instagram   String?
+  twitter     String?
+  spotify     String?
+  verified    Boolean   @default(false)
+  minPrice    Float     @default(0)
+  maxPrice    Float     @default(500)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events      Event[]
+
+  @@index([genre])
+  @@index([slug])
+}
+
+// ============================================
+// EVENTS
+// ============================================
+
+model Event {
+  id            String      @id @default(uuid())
+  venueId       String
+  artistId      String?
+  title         String      @db.VarChar(255)
+  slug          String      @unique
+  description   String?     @db.Text
+  date          DateTime
+  time          String      @db.VarChar(10)
+  doorsOpen     String?     @db.VarChar(10)
+  ageRestriction String?   @db.VarChar(20)
+  status        EventStatus @default(DRAFT)
+  imageUrl      String?
+  isFeatured    Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relations
+  venue         Venue       @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  artist        Artist?     @relation(fields: [artistId], references: [id], onDelete: SetNull)
+  ticketTiers   TicketTier[]
+  orders        Order[]
+
+  @@index([venueId])
+  @@index([artistId])
+  @@index([date])
+  @@index([status])
+  @@index([slug])
+  @@index([isFeatured])
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  SOLD_OUT
+  COMPLETED
+}
+
+// ============================================
+// TICKET TIERS
+// ============================================
+
+model TicketTier {
+  id          String    @id @default(uuid())
+  eventId     String
+  name        String    @db.VarChar(100)
+  description  String?
+  price       Float
+  quantity     Int
+  sold        Int       @default(0)
+  maxPerOrder Int       @default(10)
+  saleStart   DateTime?
+  saleEnd     DateTime?
+  createdAt   DateTime  @default(now())
+
+  event       Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tickets     Ticket[]
+
+  @@index([eventId])
+}
+
+model Ticket {
+  id            String      @id @default(uuid())
+  ticketTierId  String
+  orderId       String
+  userId        String
+  qrCode        String      @unique
+  status        TicketStatus @default(VALID)
+  usedAt        DateTime?
+  createdAt     DateTime    @default(now())
+
+  ticketTier    TicketTier  @relation(fields: [ticketTierId], references: [id], onDelete: Cascade)
+  order         Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([ticketTierId])
+  @@index([orderId])
+  @@index([userId])
+  @@index([qrCode])
+  @@index([status])
+}
+
+enum TicketStatus {
+  VALID
+  USED
+  CANCELLED
+  REFUNDED
+}
+
+// ============================================
+// ORDERS
+// ============================================
+
+model Order {
+  id              String      @id @default(uuid())
+  userId          String
+  eventId         String
+  subtotal        Float
+  platformFee     Float
+  total           Float
+  currency        String      @default("EUR")
+  status          OrderStatus @default(PENDING)
+  paymentStatus  PaymentStatus @default(PENDING)
+  paymentIntentId String?
+  paidAt          DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event           Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tickets         Ticket[]
+
+  @@index([userId])
+  @@index([eventId])
+  @@index([status])
+  @@index([paymentStatus])
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+// ============================================
+// ANALYTICS
+// ============================================
+
+model Analytics {
+  id          String    @id @default(uuid())
+  eventId     String
+  date        DateTime  @db.Date
+  views       Int       @default(0)
+  ticketsViewed Int    @default(0)
+  checkoutStarted Int  @default(0)
+  purchases   Int       @default(0)
+  revenue     Float     @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@unique([eventId, date])
+  @@index([eventId])
+  @@index([date])
+}
