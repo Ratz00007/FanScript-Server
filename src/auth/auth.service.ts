@@ -91,4 +91,25 @@ export class AuthService {
 
     return { accessToken, refreshToken };
   }
+
+  async handleGoogleLogin(googleUser: any): Promise<AuthResponseDto> {
+    // Check if user exists with this Google ID
+    let user = await this.usersService.findByEmail(googleUser.email);
+    
+    if (!user) {
+      // Create new user
+      user = await this.usersService.create({
+        email: googleUser.email,
+        name: googleUser.name,
+        password: '', // No password for OAuth users
+      });
+    }
+
+    const tokens = await this.generateTokens(user.id, user.email, user.role);
+
+    return {
+      user: this.usersService.sanitizeUser(user),
+      ...tokens,
+    };
+  }
 }
