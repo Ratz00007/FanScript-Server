@@ -8,8 +8,15 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
+  // SecurityAudit2026 v2 alternate pass: wildcard origin combined with
+  // credentials:true lets any website make authenticated cross-origin calls.
+  // Configure via CORS_ORIGINS (comma-separated exact origins).
+  const corsOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:3000,http://localhost:5173')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
   app.enableCors({
-    origin: '*',
+    origin: corsOrigins,
     credentials: true,
   });
 
